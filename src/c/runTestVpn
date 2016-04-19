@@ -1,0 +1,6 @@
+tail -F /var/log/kern.log > /tmp/run.log &
+TPID=$!
+#korean.duckdns.org
+iperf -t 30 -c 10.79.76.1
+sleep 5
+kill $TPID

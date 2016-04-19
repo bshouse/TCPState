@@ -1,0 +1,1 @@
+grep cong_avoid /proc/kallsyms  | awk '{ print $3 }' | grep -v "__"

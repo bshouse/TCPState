@@ -1,0 +1,5 @@
+tail -F /var/log/kern.log > /tmp/run.log &
+TPID=$!
+iperf -t 30 -c 192.168.70.6
+sleep 5
+kill $TPID

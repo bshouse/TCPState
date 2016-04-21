@@ -16,7 +16,7 @@ public class JProbeLogEntry {
 		entry=text=text.trim();
 		String[] chunks = text.split(" ");
 		String mis;
-		if(chunks[5].startsWith("[")) {
+		if(!chunks[5].equals("[")) {
 			//No Leading space in time
 			mis = chunks[5].replace(".", "").substring(1, 7);
 			message = chunks[6];
@@ -31,9 +31,7 @@ public class JProbeLogEntry {
 		microseconds = JProbeLogEntry.TIME24.parse(chunks[2]).getTime()*1000 + Long.parseLong(mis);
 		if(message.endsWith("slow_start")) {
 			isCongestionControl=false;
-		}
-
-		
+		}		
 	}
 
 	public String getTime() {

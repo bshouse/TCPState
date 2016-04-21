@@ -13,6 +13,15 @@ public class Transition {
 	private int connectionState;
 	private String transitionReason;
 	
+	public Transition(String connectionKey, String transitionTime, long transitionMicroseconds, int state, String reason) {
+		transition = TRANSITION_SWITCH;
+		key=connectionKey;
+		time=transitionTime;
+		microseconds=transitionMicroseconds;
+		connectionState=state;
+		transitionReason=reason;
+ 
+	}
 	public Transition(HostProgress hp, int state, String reason) {
 		transition = TRANSITION_SWITCH;
 		key=hp.getKey();

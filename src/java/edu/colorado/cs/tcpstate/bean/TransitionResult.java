@@ -5,6 +5,7 @@ public class TransitionResult {
 	private Transition tcpdump;
 	private Transition jprobeStart;
 	private Transition jprobeEnd;
+	private String result;
 	
 	public TransitionResult(Transition JProbeStart, Transition JProbeEnd, Transition TcpDump) {
 		jprobeStart = JProbeStart;
@@ -35,7 +36,7 @@ public class TransitionResult {
 
 		if(jprobeStart == null) {
 			if(jprobeEnd == null) {
-				return ("Overboard: TcpDump("+Connection.getStateString(tcpdump.getConnectionState())+")");
+				return ("Overboard: TcpDump("+Connection.getStateString(tcpdump.getConnectionState())+") - "+tcpdump.getTransitionReason());
 			} else {
 				jprobeEnd = jprobeStart;
 			}
@@ -55,6 +56,6 @@ public class TransitionResult {
 			return new String("Mismatch: JProbe ("+Connection.getStateString(connectionState)+") TcpDump ("+Connection.getStateString(tcpdump.getConnectionState())+")");
 		}
 		
-		return new String("Match("+Connection.getStateString(connectionState)+"): "+(tcpdump.getMicroseconds() - jprobeStart.getMicroseconds())+" microseconds after sender state change");
+		return new String("Match("+Connection.getStateString(connectionState)+"): "+(tcpdump.getMicroseconds() - jprobeStart.getMicroseconds())+" microseconds after sender state change ["+tcpdump.getTransitionReason()+"]");
 	}
 }

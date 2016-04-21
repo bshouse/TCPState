@@ -17,7 +17,8 @@ import edu.colorado.cs.tcpstate.bean.TransitionResult;
 
 public class TcpState {
 
-	private Map<String,Connection> connectionMap = new HashMap<String,Connection>();
+	//private Map<String,Connection> connectionMap = new HashMap<String,Connection>();
+	private Connection c = null;
 	private boolean debug = false;
 
 	private JProbeDistiller jpd;
@@ -42,7 +43,6 @@ public class TcpState {
 
 			Scanner br = new Scanner(tcpDump);
 			String line;
-			Connection c;
 			HostProgress hp = null;
 			while (br.hasNext()) {
 				line = br.nextLine();
@@ -50,21 +50,17 @@ public class TcpState {
 					continue;
 				}
 				hp = new HostProgress(line);
-				String key = hp.getKey();
+				if(c == null && !hp.getFlags().equals("[S]")) {
+					continue;
+				}
+				
 				if (hp.getFlags().equals("[S]")) {
 					c = new Connection();
 					c.addProgress(hp);
 					c.setDebug(debug);
-					connectionMap.put(key, c);
 				} else {
-					c = connectionMap.get(key);
-					if(c == null) {
-						//Strange data in TCPDUMP
-						continue;
-					}
 					c.addProgress(hp);
 					if (hp.getFlags().equals("[.]") && c.getState() == Connection.STATE_CLOSED) {
-						connectionMap.remove(c);
 						if (debug) {
 							// Print the last one / Make sure nothing was missed
 							while (jprobePos < jprobe.size()) {
@@ -75,6 +71,8 @@ public class TcpState {
 
 						if (jprobe.size() > 0) {
 							result = compareTransitions(jpd.createTransitionList(c.getKey(), jprobe), c.getTransitions());
+						} else { 
+							System.out.println("\n\n\n");
 						}
 					}
 				}
@@ -99,6 +97,14 @@ public class TcpState {
 			}
 			br.close();
 			tcpDump.close();
+			if(c.getState() != Connection.STATE_CLOSED) {
+				if (jprobe.size() > 0) {
+					result = compareTransitions(jpd.createTransitionList(c.getKey(), jprobe), c.getTransitions());
+				} else { 
+					System.out.println("\n\n\n");
+				}
+				System.out.println("Input Error: TCPDUMP Incomplete - FIN missing");
+			}
 
 		} catch (Exception e) {
 			e.printStackTrace();
@@ -142,7 +148,8 @@ public class TcpState {
 			String[] jprobes = new String[] {"iperf.inet.kern.log","iperf.vpn.kern.log","cubic.30.192.3.171.8.log", "cubic.600.192.3.171.8.log", "cubic.60.192.3.171.8.log", "cubic.30.192.3.171.8.20160420.232755.log","cubic.600.192.3.171.8.20160420.233026.log","cubic.60.192.3.171.8.20160420.232855.log","vegas.30.192.3.171.8.20160420.235356.log","vegas.600.192.3.171.8.20160420.235627.log","vegas.60.192.3.171.8.20160420.235457.log"}; 
 
 			String[] tcpdumps = new String[] {"iperf.inet.tcpdump","iperf.vpn.tcpdump","cubic.30.192.3.171.8.tcpdump.log", "cubic.600.192.3.171.8.tcpdump.log", "cubic.60.192.3.171.8.tcpdump.log", "cubic.30.192.3.171.8.20160420.232755.tcpdump.log","cubic.600.192.3.171.8.20160420.233026.tcpdump.log","cubic.60.192.3.171.8.20160420.232855.tcpdump.log","vegas.30.192.3.171.8.20160420.235356.tcpdump.log","vegas.600.192.3.171.8.20160420.235627.tcpdump.log","vegas.60.192.3.171.8.20160420.235457.tcpdump.log"};
-			for(int x = 0; x < jprobes.length; x++) {
+			//for(int x = 0; x < jprobes.length; x++) {
+			for(int x = 5; x < 6; x++) {
 				//#0-3:  100% with window recommended transitions only
 				//#
 				System.out.println("-------------------------"+jprobes[x]+"-------------------------"+x);

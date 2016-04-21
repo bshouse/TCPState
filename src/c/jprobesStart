@@ -1,18 +1,16 @@
 cd tcp
-make clean
-make
 insmod jprobe_tcp_slow_start.ko
 insmod jprobe_tcp_cong_avoid_ai.ko
 cd ..
 
 cd bic
-make clean
-make
 insmod jprobe_bictcp_cong_avoid.ko
 cd ..
 
 cd reno
-make clean
-make
 insmod jprobe_tcp_reno_cong_avoid.ko
+cd ..
+
+cd vegas 
+insmod jprobe_tcp_vegas_cong_avoid.ko
 cd ..

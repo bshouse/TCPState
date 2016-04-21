@@ -1,0 +1,19 @@
+cd tcp
+make clean
+make
+cd ..
+
+cd bic
+make clean
+make
+cd ..
+
+cd reno
+make clean
+make
+cd ..
+
+cd vegas 
+make clean
+make
+cd ..

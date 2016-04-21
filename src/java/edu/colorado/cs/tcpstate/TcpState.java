@@ -17,7 +17,7 @@ import edu.colorado.cs.tcpstate.bean.TransitionResult;
 
 public class TcpState {
 
-	private Map<String, Connection> connectionMap = new HashMap<String, Connection>();
+	private Map<String,Connection> connectionMap = new HashMap<String,Connection>();
 	private boolean debug = false;
 
 	private JProbeDistiller jpd;
@@ -25,21 +25,19 @@ public class TcpState {
 	private int jprobePos = 0;
 	private long timeOffset = 0;
 
+
+
 	public TcpState() {
 	}
-
-	public TcpState(InputStream tcpDump) {
-		process(tcpDump);
-	}
-
-	public TcpState(InputStream tcpDump, InputStream jprobeLog) {
+	public boolean process(InputStream tcpDump, InputStream jprobeLog) {
 		// debug=true;
 		jpd = new JProbeDistiller();
 		jprobe = jpd.load(jprobeLog);
-		process(tcpDump);
+		return process(tcpDump);
 	}
 
-	public void process(InputStream tcpDump) {
+	public boolean process(InputStream tcpDump) {
+		boolean result = true;
 		try {
 
 			Scanner br = new Scanner(tcpDump);
@@ -60,6 +58,10 @@ public class TcpState {
 					connectionMap.put(key, c);
 				} else {
 					c = connectionMap.get(key);
+					if(c == null) {
+						//Strange data in TCPDUMP
+						continue;
+					}
 					c.addProgress(hp);
 					if (hp.getFlags().equals("[.]") && c.getState() == Connection.STATE_CLOSED) {
 						connectionMap.remove(c);
@@ -72,16 +74,15 @@ public class TcpState {
 						}
 
 						if (jprobe.size() > 0) {
-
-							compareTransitions(jpd.createTransitionList(c.getKey(), jprobe), c.getTransitions());
+							result = compareTransitions(jpd.createTransitionList(c.getKey(), jprobe), c.getTransitions());
 						}
 					}
 				}
 
-				if (timeOffset != 0 && jprobePos < jprobe.size()&& hp.getMicroseconds() >= jprobe.get(jprobePos).getMicroseconds()) {
+				if (timeOffset != 0 && jprobePos < jprobe.size()&& hp.getMicroseconds() >= jprobe.get(jprobePos).getMicroseconds()+c.getEstimatedRtt()) {
 					do {
 						JProbeLogEntry jle = jprobe.get(jprobePos);
-						System.out.println(hp.getTime()+"--------"+jle.getMessage()+" ("+jle.getTime()+")"+" ["+hp.getMicroseconds()+" >= "+jle.getMicroseconds()+"]");
+						System.out.println(hp.getTime()+"--------"+jle.getMessage()+" ("+jle.getTime()+")");
 						jprobePos++;
 					} while (jprobePos < jprobe.size() && jprobe.get(jprobePos).getMicroseconds() <= hp.getMicroseconds());
 
@@ -102,16 +103,19 @@ public class TcpState {
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
+		return result;
 	}
 
-	public List<TransitionResult> compareTransitions(List<Transition> jprobe, List<Transition> tcpdump) {
+	public boolean compareTransitions(List<Transition> jprobe, List<Transition> tcpdump) {
 
-		System.out.println("\n\n-------------SUMMARY-------------");
+		boolean clean=true;
+		System.out.println("-------------SUMMARY-------------");
 		
 		int jprobePos = 0;
 
 		if (jprobe.size() != tcpdump.size() * 2) {
 			System.out.println("Transition mismatch jprobe(" + jprobe.size() + ") and tcpdump(" + (tcpdump.size()*2) + ")");
+			clean=false;
 		}
 		for (Transition t : tcpdump) {
 			TransitionResult tr;
@@ -121,25 +125,46 @@ public class TcpState {
 				tr = new TransitionResult(null, null, t);
 			}
 			System.out.println(tr.getResult());
+			if(clean && !tr.getResult().startsWith("Match")) {
+				clean=false;
+			}
 		}
 		while (jprobePos < jprobe.size()) {
 			TransitionResult tr = new TransitionResult(jprobe.get(jprobePos++), jprobe.get(jprobePos++), null);
 			System.out.println(tr.getResult());
 		}
-
-		return null;
+		System.out.println("\n\n\n");
+		return clean;
 	}
 
 	public static void main(String[] args) throws Exception {
-		if (args.length == 1) {
+		if(args.length == 0) {
+			String[] jprobes = new String[] {"iperf.inet.kern.log","iperf.vpn.kern.log","cubic.30.192.3.171.8.log", "cubic.600.192.3.171.8.log", "cubic.60.192.3.171.8.log", "cubic.30.192.3.171.8.20160420.232755.log","cubic.600.192.3.171.8.20160420.233026.log","cubic.60.192.3.171.8.20160420.232855.log","vegas.30.192.3.171.8.20160420.235356.log","vegas.600.192.3.171.8.20160420.235627.log","vegas.60.192.3.171.8.20160420.235457.log"}; 
+
+			String[] tcpdumps = new String[] {"iperf.inet.tcpdump","iperf.vpn.tcpdump","cubic.30.192.3.171.8.tcpdump.log", "cubic.600.192.3.171.8.tcpdump.log", "cubic.60.192.3.171.8.tcpdump.log", "cubic.30.192.3.171.8.20160420.232755.tcpdump.log","cubic.600.192.3.171.8.20160420.233026.tcpdump.log","cubic.60.192.3.171.8.20160420.232855.tcpdump.log","vegas.30.192.3.171.8.20160420.235356.tcpdump.log","vegas.600.192.3.171.8.20160420.235627.tcpdump.log","vegas.60.192.3.171.8.20160420.235457.tcpdump.log"};
+			for(int x = 0; x < jprobes.length; x++) {
+				//#0-3:  100% with window recommended transitions only
+				//#
+				System.out.println("-------------------------"+jprobes[x]+"-------------------------"+x);
+				FileInputStream jfis = new FileInputStream(new File("/opt/UCBVM/ReceiverDetectSender/"+jprobes[x]));
+				FileInputStream tfis = new FileInputStream(new File("/opt/UCBVM/ReceiverDetect/"+tcpdumps[x]));
+				TcpState ts = new TcpState();
+				if(!ts.process(tfis, jfis)) {
+					break;
+				}
+				jfis.close();
+				tfis.close();
+				
+			}
+		} else if (args.length == 1) {
 			FileInputStream tfis = new FileInputStream(new File(args[0]));
-			new TcpState(tfis);
+			(new TcpState()).process(tfis);;
 			tfis.close();
 
 		} else if (args.length == 2) {
 			FileInputStream jfis = new FileInputStream(new File(args[1]));
 			FileInputStream tfis = new FileInputStream(new File(args[0]));
-			new TcpState(tfis, jfis);
+			(new TcpState()).process(tfis, jfis);
 			jfis.close();
 			tfis.close();
 

@@ -79,7 +79,7 @@ public class JProbeDistiller {
 			br.close();
 		} catch (Exception e) {
 			e.printStackTrace();
-		}
+		}		
 		return jprobeEntries;
 	}
 

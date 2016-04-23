@@ -3,10 +3,10 @@ package edu.colorado.cs.tcpstate;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.InputStream;
+import java.text.NumberFormat;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
+import java.util.Locale;
 import java.util.Scanner;
 
 import edu.colorado.cs.tcpstate.bean.Connection;
@@ -21,6 +21,7 @@ public class TcpState {
 	private Connection c = null;
 	private boolean debug = false;
 
+	private NumberFormat nf = NumberFormat.getNumberInstance(Locale.US);
 	private JProbeDistiller jpd;
 	private List<JProbeLogEntry> jprobe = new ArrayList<JProbeLogEntry>();
 	private int jprobePos = 0;
@@ -70,7 +71,7 @@ public class TcpState {
 						}
 
 						if (jprobe.size() > 0) {
-							result = compareTransitions(jpd.createTransitionList(c.getKey(), jprobe), c.getTransitions());
+							result = compareTransitions(jpd.createTransitionList(c.getKey(), jprobe), c.getTransitions(), c.getConnectionDuration());
 						} else { 
 							System.out.println("\n\n\n");
 						}
@@ -99,11 +100,12 @@ public class TcpState {
 			tcpDump.close();
 			if(c.getState() != Connection.STATE_CLOSED) {
 				if (jprobe.size() > 0) {
-					result = compareTransitions(jpd.createTransitionList(c.getKey(), jprobe), c.getTransitions());
+					result = compareTransitions(jpd.createTransitionList(c.getKey(), jprobe), c.getTransitions(), c.getConnectionDuration());
 				} else { 
 					System.out.println("\n\n\n");
 				}
 				System.out.println("Input Error: TCPDUMP Incomplete - FIN missing");
+				result=true;
 			}
 
 		} catch (Exception e) {
@@ -112,53 +114,97 @@ public class TcpState {
 		return result;
 	}
 
-	public boolean compareTransitions(List<Transition> jprobe, List<Transition> tcpdump) {
+	public boolean compareTransitions(List<Transition> jprobe, List<Transition> tcpdump, long duration) {
 
-		boolean clean=true;
+		long missedMicroseconds = 0;
+		long overboardMicroseconds = 0;
+		long lateMicroseconds = 0;
+		TransitionResult lastAccurateTcpDumpTransitionResult=null, lastOverboardTcpDumpTransitionResult=null;
+		boolean pass=true;
+		int currentState = Connection.STATE_SLOW_START;
 		System.out.println("-------------SUMMARY-------------");
-		
 		int jprobePos = 0;
 
-		if (jprobe.size() != tcpdump.size() * 2) {
-			System.out.println("Transition mismatch jprobe(" + jprobe.size() + ") and tcpdump(" + (tcpdump.size()*2) + ")");
-			clean=false;
-		}
-		for (Transition t : tcpdump) {
+		for (int x = 0; x < tcpdump.size(); x++) {
+			Transition t = tcpdump.get(x);
 			TransitionResult tr;
 			if (jprobePos + 2 <= jprobe.size()) {
 				tr = new TransitionResult(jprobe.get(jprobePos++), jprobe.get(jprobePos++), t);
 			} else {
 				tr = new TransitionResult(null, null, t);
 			}
-			System.out.println(tr.getResult());
-			if(clean && !tr.getResult().startsWith("Match")) {
-				clean=false;
-			}
+			String result = tr.getResult();
+			
+			if(result.startsWith("Match")) {
+				lastAccurateTcpDumpTransitionResult = tr;
+				currentState = t.getConnectionState();
+				long late = tr.getTcpdump().getMicroseconds() - tr.getJprobeStart().getMicroseconds();
+				if(late < 0) {
+					late*=-1;
+				}
+				lateMicroseconds += late;
+			} else if(result.startsWith("Overboard")) {
+				if(lastOverboardTcpDumpTransitionResult != null) {
+					//At least two overboard results
+					if(lastOverboardTcpDumpTransitionResult.getTcpdump().getConnectionState() != currentState) {
+						overboardMicroseconds += tr.getTcpdump().getMicroseconds() - lastOverboardTcpDumpTransitionResult.getTcpdump().getMicroseconds();
+					}
+				} 
+				lastOverboardTcpDumpTransitionResult=tr;
+			} else if(result.startsWith("Mismatch") && tcpdump.size() > x+1 && tcpdump.get(x+1).getConnectionState() == tr.getJprobeEnd().getConnectionState()) {
+				//Check for skipped transition
+				//Vegas will start in congestion congtrol instead of slow start
+				System.out.println("Vegas Correction");
+				tr = new TransitionResult(jprobe.get(jprobePos-2), jprobe.get(jprobePos-1), null);
+				result = tr.getResult();
+				missedMicroseconds+=tr.getMicrosecondsInTransition();
+				x--;
+
+			} 
+			System.out.println(result);
 		}
+		if(lastOverboardTcpDumpTransitionResult != null && overboardMicroseconds == 0) {
+			overboardMicroseconds = lastAccurateTcpDumpTransitionResult.getJprobeEnd().getMicroseconds() - lastOverboardTcpDumpTransitionResult.getTcpdump().getMicroseconds();
+		}
+		
+		//Report Missed Transitions
 		while (jprobePos < jprobe.size()) {
 			TransitionResult tr = new TransitionResult(jprobe.get(jprobePos++), jprobe.get(jprobePos++), null);
 			System.out.println(tr.getResult());
+			if(tr.getJprobeStart().getConnectionState() != currentState) {
+				missedMicroseconds+=tr.getMicrosecondsInTransition();
+			}
+					
 		}
+		if(missedMicroseconds > 0 || overboardMicroseconds > 0 || lateMicroseconds > 0) {
+			long total = missedMicroseconds + overboardMicroseconds + lateMicroseconds;
+			System.out.print("Total microseconds in wrong state: "+nf.format(total));
+			if(total > duration*.07) {
+				pass=false;
+			}
+			System.out.println(" (Permitted: "+nf.format((long)(duration*.07))+" microseconds of "+nf.format(duration)+" total connection time)");
+		}
+		System.out.println("Accuracy: "+ nf.format((((duration-(overboardMicroseconds + missedMicroseconds + lateMicroseconds))*100.0f)/duration))+"%");
 		System.out.println("\n\n\n");
-		return clean;
+		return pass;
 	}
 
 	public static void main(String[] args) throws Exception {
 		if(args.length == 0) {
-			String[] jprobes = new String[] {"iperf.inet.kern.log","iperf.vpn.kern.log","cubic.30.192.3.171.8.log", "cubic.600.192.3.171.8.log", "cubic.60.192.3.171.8.log", "cubic.30.192.3.171.8.20160420.232755.log","cubic.600.192.3.171.8.20160420.233026.log","cubic.60.192.3.171.8.20160420.232855.log","vegas.30.192.3.171.8.20160420.235356.log","vegas.600.192.3.171.8.20160420.235627.log","vegas.60.192.3.171.8.20160420.235457.log"}; 
+			String[] jprobes = new String[] {"iperf.inet.kern.log","iperf.vpn.kern.log","cubic.30.192.3.171.8.log", "cubic.600.192.3.171.8.log", "cubic.60.192.3.171.8.log","cubic.600.192.3.171.8.20160420.233026.log","cubic.60.192.3.171.8.20160420.232855.log","vegas.30.192.3.171.8.20160420.235356.log","vegas.60.192.3.171.8.20160420.235457.log"}; 
 
-			String[] tcpdumps = new String[] {"iperf.inet.tcpdump","iperf.vpn.tcpdump","cubic.30.192.3.171.8.tcpdump.log", "cubic.600.192.3.171.8.tcpdump.log", "cubic.60.192.3.171.8.tcpdump.log", "cubic.30.192.3.171.8.20160420.232755.tcpdump.log","cubic.600.192.3.171.8.20160420.233026.tcpdump.log","cubic.60.192.3.171.8.20160420.232855.tcpdump.log","vegas.30.192.3.171.8.20160420.235356.tcpdump.log","vegas.600.192.3.171.8.20160420.235627.tcpdump.log","vegas.60.192.3.171.8.20160420.235457.tcpdump.log"};
-			//for(int x = 0; x < jprobes.length; x++) {
-			for(int x = 5; x < 6; x++) {
-				//#0-3:  100% with window recommended transitions only
-				//#
-				System.out.println("-------------------------"+jprobes[x]+"-------------------------"+x);
+			String[] tcpdumps = new String[] {"iperf.inet.tcpdump","iperf.vpn.tcpdump","cubic.30.192.3.171.8.tcpdump.log", "cubic.600.192.3.171.8.tcpdump.log", "cubic.60.192.3.171.8.tcpdump.log","cubic.600.192.3.171.8.20160420.233026.tcpdump.log","cubic.60.192.3.171.8.20160420.232855.tcpdump.log","vegas.30.192.3.171.8.20160420.235356.tcpdump.log","vegas.60.192.3.171.8.20160420.235457.tcpdump.log"};
+			for(int x = 0; x < jprobes.length; x++) {
+			//for(int x = 8; x < 9; x++) {
+				System.out.println(x+"]-------------------------"+jprobes[x]+"-------------------------"+tcpdumps[x]);
 				FileInputStream jfis = new FileInputStream(new File("/opt/UCBVM/ReceiverDetectSender/"+jprobes[x]));
 				FileInputStream tfis = new FileInputStream(new File("/opt/UCBVM/ReceiverDetect/"+tcpdumps[x]));
 				TcpState ts = new TcpState();
 				if(!ts.process(tfis, jfis)) {
+					System.out.println(x+"]-------------------------"+jprobes[x]+"-------------------------"+tcpdumps[x]);
 					break;
 				}
+				System.out.println(x+"]-------------------------"+jprobes[x]+"-------------------------"+tcpdumps[x]);
 				jfis.close();
 				tfis.close();
 				

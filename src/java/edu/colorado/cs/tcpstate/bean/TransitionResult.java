@@ -1,11 +1,14 @@
 package edu.colorado.cs.tcpstate.bean;
 
+import java.text.NumberFormat;
+import java.util.Locale;
+
 public class TransitionResult {
 
+	private static final NumberFormat nf = NumberFormat.getNumberInstance(Locale.US);
 	private Transition tcpdump;
 	private Transition jprobeStart;
 	private Transition jprobeEnd;
-	private String result;
 	
 	public TransitionResult(Transition JProbeStart, Transition JProbeEnd, Transition TcpDump) {
 		jprobeStart = JProbeStart;
@@ -50,12 +53,15 @@ public class TransitionResult {
 			return new String("Mismatch: JProbe Start("+Connection.getStateString(connectionState)+") End("+Connection.getStateString(jprobeEnd.getConnectionState())+")");
 		}
 		if(tcpdump == null) {
-			return new String("Missed("+Connection.getStateString(connectionState)+"): "+jprobeStart.getTime()+" - "+jprobeEnd.getTime());
+			return new String("Missed("+Connection.getStateString(connectionState)+"): "+jprobeStart.getTime()+" - "+jprobeEnd.getTime()+ " = "+nf.format(getMicrosecondsInTransition())+" microseconds");
 		}
 		if(connectionState != tcpdump.getConnectionState()) {
 			return new String("Mismatch: JProbe ("+Connection.getStateString(connectionState)+") TcpDump ("+Connection.getStateString(tcpdump.getConnectionState())+")");
 		}
 		
-		return new String("Match("+Connection.getStateString(connectionState)+"): "+(tcpdump.getMicroseconds() - jprobeStart.getMicroseconds())+" microseconds after sender state change ["+tcpdump.getTransitionReason()+"]");
+		return new String("Match("+Connection.getStateString(connectionState)+"): "+nf.format(tcpdump.getMicroseconds() - jprobeStart.getMicroseconds())+" microseconds after sender state change ["+tcpdump.getTransitionReason()+"]");
+	}
+	public long getMicrosecondsInTransition() {
+		return jprobeEnd.getMicroseconds() - jprobeStart.getMicroseconds();
 	}
 }

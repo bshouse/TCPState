@@ -15,42 +15,22 @@ public class Connection {
 	public static final int STATE_CLOSED = 6;
 
 	//Common tracking variables
-	protected boolean debug = false;
-	protected boolean includeFastRetransmit = false;
-	//protected List<HostProgress> sequence = new ArrayList<HostProgress>(10000);
-	//protected List<HostProgress> sender = new ArrayList<HostProgress>(5000); 
-	//protected List<HostProgress> receiver = new ArrayList<HostProgress>(5000);
+	protected boolean debug = false;	
 	protected List<Transition> transitions = new ArrayList<Transition>(100);
 	protected int state = STATE_CLOSED;
 	protected String senderIP;
 	protected String key=null;
+	protected HostProgress first = null;
+	protected HostProgress last = null;
 
 	/*
 	 * 
 	 * Basic shared TcpDump calculations
 	 * 
 	 */
-	//Time interval between TCP dump time stamps
-	private long timestampInterval=0; 
-	//Time stamp of last packet in RTT
-	private long lastRtTimestamp=0;
-
-	
 	//Estimated RTT: Time between SYN-ACK & ACK in handshake
 	private int estimatedRtt=0;
-	
-	//The time stamp of the previous TCP dump entry
-	private long lastTime = 0;
-	
-	//Time stamp of the last TcpDump entry of the sender
-	private long lastSenderTime = 0;
-	//Timestamp of the last TcpDump entry of the receiver
-	private long lastReceiverTime = 0;
-	//Time between send/receive
-	private long interactionPeriod=0; 
-	//Previous Time between send/receive
-	private long lastInteractionPeriod=0; 
-
+	private long lastRttTimestamp=0;
 
 
 	
@@ -59,64 +39,69 @@ public class Connection {
 	 * Window size calculations
 	 * 
 	 */
+	private int ssthresh=Integer.MAX_VALUE;
 	//Packets in the round-trip time
-	private int packetsPerRtt=0;
+	private int sequenceCountPerRtt=0;
 	//Packets in the previous round-trip time
-	private int lastPacketsPerRtt=0;
+	private int lastSequenceCountPerRtt=0;
+	//Number of TCP dump entries
+	private int senderPacketsPerRtt=0;
+	private int lastSenderPacketsPerRtt=0;
+	//Receiver Window Size
+	private int receiverWindowSize=0;
+	private int lastReceiverWindowSize=0;
+	//Slow start window size
+	private int slowStartInitialWindow = 0;
 	
 
 	/*
 	 * 
-	 * RTT Calculations
+	 * Duplicate ACK tracking
 	 * 
 	 */
-	private int effectiveRtt=0;
-
-	/*
-	 * 
-	 * Fast retransmit calculations
-	 * 
-	 */
-	//Time the last fast retransmit was completed
-	private long fastRetransmitTimestamp=0;
-	//Sequence number of the last fast retransmit
-	private long fastRetransmitSequence = 0;
-	//Time when the last fast retransmit was received
-	private long fastRetransmitRttTime=0;
+	//Time the last Duplicate ACK sequence was received
+	private long duplicateAckRetransmittedTimestamp=0;
+	//Sequence number of the last DUP ACK
+	private long duplicateAckSequenceNumber = 0;
+	//Time when the last DUP ACk was received
+	private long duplicateAckRttTime=0;
 	//Number of duplicate ACKs sent for a sequence number
-	private long fastRetransmitRttDupAckCount = 0;
+	private long duplicateAckRttCount = 0;
 	//The last ACK sent (used to identify potential fast retransmit sequence number) 
 	private long lastAck;
 	//Number of duplicate ACKs sent
 	private int dupAckCount = 0;
 
 	
+	
+	
+	
 	public void addProgress(HostProgress hp) {
 		//sequence.add(hp);
 		if(key == null) {
 			key = hp.getKey();
+			first = hp;
 		}
+		last=hp;
 		
 		boolean isSender=true;
 		if(state != STATE_CLOSED) {
-			if(hp.getSource().equals(senderIP)) {
-				//sender.add(hp);
-			} else {
-				//receiver.add(hp);
+			if(!hp.getSource().equals(senderIP)) {
 				isSender=false;
 			}
 		} else {
 			senderIP = hp.getSource();
-			//sender.add(hp);
 		}
 		
 		//Watch for the explicit notifications
 		String flags = hp.getFlags();
-		if(state == STATE_HANDSHAKE && flags.equals("[.]")) {
-			//3-way handshake complete
-			estimatedRtt = (int)(hp.getMicroseconds() - lastRtTimestamp);
-			lastRtTimestamp = hp.getMicroseconds(); 
+		if(state == STATE_HANDSHAKE && flags.equals("[.]")) { //3-way handshake complete
 			
+			//Estimate RTT
+			estimatedRtt = (int)(hp.getMicroseconds() - lastRttTimestamp);
+			//Record last RTT Time stamp 
+			lastRttTimestamp = hp.getMicroseconds();
+			//Move state to Slow Start
 			setState(STATE_SLOW_START,"Completion ACK",hp);
 			
 			if(debug) {
@@ -124,15 +109,14 @@ public class Connection {
 			}
 			
 		} else if(state == STATE_HANDSHAKE && flags.equals("[S.]")) { //Handshake SYN-ACK
-			
-			//Prepare to estimated RTT
-			lastRtTimestamp = hp.getMicroseconds();
+			//Prepare start time for estimated RTT
+			lastRttTimestamp = hp.getMicroseconds();
 			
 		} else if(flags.equals("[S]")) { //Initial SYN
 			setState(STATE_HANDSHAKE,"Initial SYN",hp);
-			lastRtTimestamp = hp.getMicroseconds();
+			lastRttTimestamp = hp.getMicroseconds();
 			
-		} else if(flags.startsWith("[F")) {
+		} else if(flags.startsWith("[F")) { //Closing FIN
 			if(state != STATE_CLOSING) {
 				setState(STATE_CLOSING,"Sender FIN",hp);				
 			} else {
@@ -145,105 +129,91 @@ public class Connection {
 			//Sender/Receiver Checks
 			//
 			if(isSender) {
-				lastSenderTime = hp.getMicroseconds();
 
 				//Throughput sum
-				packetsPerRtt += hp.getSequenceSize();
-
-				//Time between send & receive
-				interactionPeriod = lastSenderTime - lastReceiverTime;
+				sequenceCountPerRtt += hp.getSequenceSize();
 				
-				if(hp.sequenceContains(fastRetransmitSequence)) {
-					long recoveryTime = hp.getMicroseconds()-fastRetransmitTimestamp;
-					fastRetransmitRttDupAckCount+=dupAckCount;
-					fastRetransmitRttTime+=recoveryTime;
-					if(includeFastRetransmit) {
-						System.out.println("\t"+hp.getTime()+" Fast Retransmitted:  "+lastAck+" Time: "+recoveryTime+ " Count: "+dupAckCount);
-					}
-				}
+				//Sender packet count
+				senderPacketsPerRtt++;
 
+				//Capture the initial Slow start window size
+				if(slowStartInitialWindow == 0) {
+					slowStartInitialWindow = (int) hp.getSequenceSize();
+				}	
+				
+				if(hp.sequenceContains(duplicateAckSequenceNumber)) {
+					long recoveryTime = hp.getMicroseconds()-duplicateAckRetransmittedTimestamp;
+					duplicateAckRttCount+=dupAckCount;
+					duplicateAckRttTime+=recoveryTime;
+					//System.out.println("\t"+hp.getTime()+" Fast Retransmitted:  "+lastAck+" Time: "+recoveryTime+ " Count: "+dupAckCount);
+				}
 				
 												
 			} else {
-				lastReceiverTime = hp.getMicroseconds();
+				if(hp.getWindowSize() != receiverWindowSize) {
+					receiverWindowSize = hp.getWindowSize();
+				}
 				
 				//Watch for 3x Duplicate ACK
 				if(hp.getAck() == lastAck) {
 					dupAckCount++;
 					if(dupAckCount == 3) {
-						fastRetransmitSequence=lastAck;
+						duplicateAckSequenceNumber=lastAck;
 					}
 				} else {
-					fastRetransmitTimestamp=hp.getMicroseconds();
+					duplicateAckRetransmittedTimestamp=hp.getMicroseconds();
 					lastAck=hp.getAck();
 					dupAckCount=1;
 				}
 
-				
-				//System.out.println(hp.getTime()+" Receiver WIN: "+hp.getWindowSize()+"\tACK: "+hp.getAck()+"\tSEQ: "+hp.getSequence()+"("+hp.getSequenceSize()+")");
+
+								
 			}
-			
-			
-			//
-			//State Shift
-			//
-			
-			//Timestamp interval
-			if(lastTime != 0) {
-				 //diff > 10x estimatedRTT during cubic switch to slow start
-				 timestampInterval = hp.getMicroseconds() - lastTime;
-				 lastTime = hp.getMicroseconds();
-				 if(false) {
-					 System.out.println(hp.getTime()+" Timestamp Interval: "+timestampInterval+" Window Size: "+hp.getSequenceSize());
-				 }
-			 } else {
-				 lastTime = hp.getMicroseconds();
-			 }
 						
-			//Estimated RTTs (Once per RTT)
-			if( (lastRtTimestamp + estimatedRtt) <= hp.getMicroseconds()) {				
+			//			
+			//Once per RTT processing
+			//
+			if( (lastRttTimestamp + estimatedRtt) <= hp.getMicroseconds()) {				
 
-				//Effective Rtt
-				effectiveRtt = (int)(hp.getMicroseconds()-lastRtTimestamp); 
 				
-				if(this.includeFastRetransmit && fastRetransmitRttDupAckCount > 0) {
-					System.out.println("\t"+hp.getTime()+" Fast Retransmitted Total Time: "+fastRetransmitRttTime+ " Count: "+fastRetransmitRttDupAckCount+ " Ratio: "+(fastRetransmitRttTime/fastRetransmitRttDupAckCount));
+				if(state == STATE_SLOW_START && sequenceCountPerRtt > lastSequenceCountPerRtt || duplicateAckRttCount > 0) {
+					//
+					ssthresh=sequenceCountPerRtt/2;
 				}
-
 				
 				//Throughput
-				if(lastRtTimestamp != 0) {
+				if(lastRttTimestamp != 0) {
 					
 					if(debug) {
 						System.out.println("\n");
-						System.out.println("Packets per RTT("+getStateString(state)+"): "+packetsPerRtt+ " Interaction Period: "+interactionPeriod);
-						System.out.println("Effective RTT: "+effectiveRtt+" Effective-Estimated RTT: "+ (effectiveRtt - estimatedRtt)+" SeqLen: "+packetsPerRtt+" < "+lastPacketsPerRtt);
-						//System.out.println("SeqLen: "+packetsPerRtt+" < "+lastPacketsPerRtt+"\n");			
+						System.out.println("Current State: ["+getStateString(state)+"] SSTHRESH: ["+ssthresh+"]");
+						System.out.println("Sequence Length: ["+sequenceCountPerRtt+"/"+lastSequenceCountPerRtt+"]");
+						System.out.println("Packets- Per RTT: ["+senderPacketsPerRtt+"/"+lastSenderPacketsPerRtt+"] SS Init Win: ["+slowStartInitialWindow+"]");
+						System.out.println("Receiver Window: ["+receiverWindowSize+"/"+lastReceiverWindowSize+"]");
+						if(duplicateAckRttCount > 0) {
+							System.out.println("Duplicate ACK: ["+duplicateAckRttTime+"] Count: ["+duplicateAckRttCount+"] Ratio: ["+(duplicateAckRttTime/duplicateAckRttCount)+"]");
+						}
 					}
 					
 					Transition windowRecommendedTransition = getWindowRecommendation(hp);
-					Transition rttRecommendedTransition = getRttRecommendation(hp);
-					if(windowRecommendedTransition.getTransitionReason() != null) {
-						if(windowRecommendedTransition.getTransitionReason().startsWith("CWND Reduction @ ")) {
-							setState(rttRecommendedTransition);
-						} else {
-							setState(windowRecommendedTransition);
-						}
-					}
+					setState(windowRecommendedTransition);
+
+					
 					//Update Window calculation variables
-					lastPacketsPerRtt=packetsPerRtt;
-					packetsPerRtt=0;					
+					lastSequenceCountPerRtt=sequenceCountPerRtt;
+					sequenceCountPerRtt=0;
+					lastSenderPacketsPerRtt=senderPacketsPerRtt;
+					senderPacketsPerRtt=0;
+					lastReceiverWindowSize=receiverWindowSize;
+					receiverWindowSize=0;
+					
+					//Reset Duplicate ACK counts at the end of the Estimated RTT 
+					duplicateAckRttTime=0;
+					duplicateAckRttCount=0;
 				}
 
 				
-				lastRtTimestamp = hp.getMicroseconds();
-				lastInteractionPeriod=interactionPeriod;
-
-				//Reset fast retransmit counts at the end of the Estimated RTT 
-				fastRetransmitRttTime=0;
-				fastRetransmitRttDupAckCount=0;
-
-				
+				lastRttTimestamp = hp.getMicroseconds();
 				if(debug) {
 					System.out.println("\n");
 				}
@@ -256,32 +226,16 @@ public class Connection {
 			
 		}
 	}
-	private Transition getRttRecommendation(HostProgress hp) {
-		if(state == STATE_SLOW_START) {
-			return new Transition(hp,state,null);
-		} else if(state == STATE_CONGESTION_AVOIDANCE) {
-			return new Transition(hp,state,null);
-		}
-		return new Transition(hp,state,null);
-	}
 	private Transition getWindowRecommendation(HostProgress hp) {
 		if(state == STATE_SLOW_START) {
-			if(packetsPerRtt < lastPacketsPerRtt) {
-				if(packetsPerRtt < lastPacketsPerRtt * .4) {
-					return new Transition(hp,STATE_SLOW_START,"Tiemout");
-				} else {
-					return new Transition(hp,STATE_CONGESTION_AVOIDANCE,"Window Stabilized");
-				}
-			
+			if(senderPacketsPerRtt <= lastSenderPacketsPerRtt) {
+				return new Transition(hp,STATE_CONGESTION_AVOIDANCE,"Window Stabilized");
 			}
 			
 		} else if(state == STATE_CONGESTION_AVOIDANCE) {
-			if(packetsPerRtt < 11 && lastPacketsPerRtt > 10) {
-				return new Transition(hp,STATE_SLOW_START,"CWND Reset");
-				
-			//} else if(packetsPerRtt < lastPacketsPerRtt * .20) {
-			} else if( (((packetsPerRtt - lastPacketsPerRtt) / (lastPacketsPerRtt * 1.0f) )*100) < -80 ) { //-81
-				return new Transition(hp,STATE_SLOW_START,"CWND Reduction @ "+(int)(((packetsPerRtt - lastPacketsPerRtt) / (lastPacketsPerRtt * 1.0f) )*-100)+"%");
+			
+			if(sequenceCountPerRtt < receiverWindowSize) {
+				return new Transition(hp,STATE_SLOW_START,"Below SSTHRESH");
 			}
 		} 
 		return new Transition(hp,state,null);
@@ -298,16 +252,16 @@ public class Connection {
 		if(state == newState) {
 			if(t.getTransitionReason() == null) {
 				return;
-			} else if(newState == STATE_SLOW_START){
+			} /*else if(newState == STATE_SLOW_START){
 				//Add missed congestion avoidance
 				Transition tMissed = new Transition(t.getKey(),t.getTime(),t.getMicroseconds(),STATE_CONGESTION_AVOIDANCE,t.getTransitionReason());
 				transitions.add(tMissed);
-				System.out.println(t);
+				System.out.println("Corrected: "+tMissed);
 			} else if(newState == STATE_CONGESTION_AVOIDANCE) {
 				Transition tMissed = new Transition(t.getKey(),t.getTime(),t.getMicroseconds(),STATE_SLOW_START,t.getTransitionReason());
 				transitions.add(tMissed);
-				System.out.println(t);
-			}
+				System.out.println("Corrected: "+tMissed+" -> "+t.getTransitionReason());
+			}*/
 		} 
 		
 		if(newState == STATE_SLOW_START || newState == STATE_CONGESTION_AVOIDANCE) {
@@ -315,9 +269,7 @@ public class Connection {
 		}
 		
 		System.out.println(t);
-		
 		state=newState;
-
 	}
 	
 	public static String getStateString(int cState) {
@@ -362,6 +314,9 @@ public class Connection {
 	}
 	public void setDebug(boolean debug) {
 		this.debug = debug;
+	}
+	public long getConnectionDuration() {
+		return last.getMicroseconds() - first.getMicroseconds();
 	}
 
 }

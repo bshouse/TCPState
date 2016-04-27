@@ -1,0 +1,15 @@
+modprobe tcp_bic
+modprobe tcp_dctcp
+modprobe tcp_highspeed
+modprobe tcp_htcp
+modprobe tcp_hybla
+modprobe tcp_illinois
+modprobe tcp_scalable
+modprobe tcp_vegas
+modprobe tcp_veno
+modprobe tcp_westwood
+modprobe tcp_yeah
+
+sysctl -q -w net.ipv4.tcp_allowed_congestion_control="cubic reno bic dctcp highspeed htcp hybla illinois scalable vegas veno westwood yeah"
+
+

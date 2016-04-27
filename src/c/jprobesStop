@@ -1,5 +1,12 @@
-rmmod jprobe_tcp_slow_start
-rmmod jprobe_tcp_cong_avoid_ai
-rmmod jprobe_bictcp_cong_avoid
-rmmod jprobe_tcp_reno_cong_avoid
-rmmod jprobe_tcp_vegas_cong_avoid
+rmmod jprobe_tcp_slow_start.ko
+rmmod jprobe_tcp_cong_avoid_ai.ko
+rmmod jprobe_bictcp_cong_avoid.ko
+rmmod jprobe_hstcp_cong_avoid.ko
+rmmod jprobe_htcp_cong_avoid.ko
+rmmod jprobe_hybla_cong_avoid.ko
+rmmod jprobe_tcp_illinois_cong_avoid.ko
+rmmod jprobe_tcp_scalable_cong_avoid.ko
+rmmod jprobe_tcp_veno_cong_avoid.ko
+rmmod jprobe_tcp_yeah_cong_avoid.ko
+rmmod jprobe_tcp_reno_cong_avoid.ko
+rmmod jprobe_tcp_vegas_cong_avoid.ko

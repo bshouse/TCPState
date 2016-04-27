@@ -7,4 +7,4 @@ default:
 	$(MAKE) -C $(KDIR) SUBDIRS=$(PWD) modules
 
 clean:
-	rm -rf Module.markers modules.order Module.symvers jprobe_tcp_reno_cong_avoid.ko jprobe_tcp_reno_cong_avoid.mod.c jprobe_tcp_reno_cong_avoid.mod.o jprobe_tcp_reno_cong_avoid.o .jprobe_tcp_reno_cong_avoid.ko.cmd .jprobe_tcp_reno_cong_avoid.mod.o.cmd .jprobe_tcp_reno_cong_avoid.o.cmd
+	rm -rf Module.markers modules.order Module.symvers jprobe_tcp_reno_cong_avoid.ko jprobe_tcp_reno_cong_avoid.mod.c jprobe_tcp_reno_cong_avoid.mod.o jprobe_tcp_reno_cong_avoid.o .jprobe_tcp_reno_cong_avoid.ko.cmd .jprobe_tcp_reno_cong_avoid.mod.o.cmd .jprobe_tcp_reno_cong_avoid.o.cmd .tmp_versions

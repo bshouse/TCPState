@@ -1,39 +1,39 @@
 cd tcp
-make
+make clean
 cd ..
 
 cd bic
-make
+make clean
 cd ..
 
 cd hstcp
-make
+make clean
 cd ..
 
 cd hybla
-make
+make clean
 cd ..
 
 cd illinois
-make
+make clean
 cd ..
 
 cd scalable
-make
+make clean
 cd ..
 
 cd veno
-make
+make clean
 cd ..
 
 cd reno
-make
+make clean
 cd ..
 
 cd vegas
-make
+make clean
 cd ..
 
 cd yeah
-make
+make clean
 cd ..

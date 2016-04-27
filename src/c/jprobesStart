@@ -1,16 +1,12 @@
-cd tcp
-insmod jprobe_tcp_slow_start.ko
-insmod jprobe_tcp_cong_avoid_ai.ko
-cd ..
-
-cd bic
-insmod jprobe_bictcp_cong_avoid.ko
-cd ..
-
-cd reno
-insmod jprobe_tcp_reno_cong_avoid.ko
-cd ..
-
-cd vegas 
-insmod jprobe_tcp_vegas_cong_avoid.ko
-cd ..
+insmod tcp/jprobe_tcp_slow_start.ko
+insmod tcp/jprobe_tcp_cong_avoid_ai.ko
+insmod bic/jprobe_bictcp_cong_avoid.ko
+insmod hstcp/jprobe_hstcp_cong_avoid.ko
+insmod htcp/jprobe_htcp_cong_avoid.ko
+insmod hybla/jprobe_hybla_cong_avoid.ko
+insmod illinois/jprobe_tcp_illinois_cong_avoid.ko
+insmod scalable/jprobe_tcp_scalable_cong_avoid.ko
+insmod veno/jprobe_tcp_veno_cong_avoid.ko
+insmod yeah/jprobe_tcp_yeah_cong_avoid.ko
+insmod reno/jprobe_tcp_reno_cong_avoid.ko
+insmod vegas/jprobe_tcp_vegas_cong_avoid.ko

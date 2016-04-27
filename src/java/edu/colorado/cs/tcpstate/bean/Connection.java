@@ -1,10 +1,14 @@
 package edu.colorado.cs.tcpstate.bean;
 
+import java.text.NumberFormat;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 public class Connection {
 
+	private static final NumberFormat nf = NumberFormat.getNumberInstance(Locale.US);
+	
 	//TCP States
 	public static final int STATE_HANDSHAKE = 0;
 	public static final int STATE_SLOW_START = 1;
@@ -16,6 +20,8 @@ public class Connection {
 
 	//Common tracking variables
 	protected boolean debug = false;	
+	protected boolean TCP_OPTION_TIMESTAMP = false;
+	protected float RTT_VARIANCE_TRIGGER_LEVEL = 0.3f;
 	protected List<Transition> transitions = new ArrayList<Transition>(100);
 	protected int state = STATE_CLOSED;
 	protected String senderIP;
@@ -28,10 +34,9 @@ public class Connection {
 	 * Basic shared TcpDump calculations
 	 * 
 	 */
-	//Estimated RTT: Time between SYN-ACK & ACK in handshake
-	private int estimatedRtt=0;
+	//Handshake Estimated RTT: Time between SYN-ACK & ACK in handshake
+	private int estimatedRttHandshake=0;
 	private long lastRttTimestamp=0;
-
 
 	
 	/*
@@ -39,7 +44,6 @@ public class Connection {
 	 * Window size calculations
 	 * 
 	 */
-	private int ssthresh=Integer.MAX_VALUE;
 	//Packets in the round-trip time
 	private int sequenceCountPerRtt=0;
 	//Packets in the previous round-trip time
@@ -50,8 +54,6 @@ public class Connection {
 	//Receiver Window Size
 	private int receiverWindowSize=0;
 	private int lastReceiverWindowSize=0;
-	//Slow start window size
-	private int slowStartInitialWindow = 0;
 	
 
 	/*
@@ -71,9 +73,15 @@ public class Connection {
 	private long lastAck;
 	//Number of duplicate ACKs sent
 	private int dupAckCount = 0;
+	
+	/*
+	 * 
+	 * Real-time RTT Estimation
+	 * 
+	 */
+	private List<TcpTimestamp> tcpOptionTimestampSender = new ArrayList<TcpTimestamp>(100);
+	private long tcpOptionTimestampRtt=0L;
 
-	
-	
 	
 	
 	public void addProgress(HostProgress hp) {
@@ -98,15 +106,13 @@ public class Connection {
 		if(state == STATE_HANDSHAKE && flags.equals("[.]")) { //3-way handshake complete
 			
 			//Estimate RTT
-			estimatedRtt = (int)(hp.getMicroseconds() - lastRttTimestamp);
+			estimatedRttHandshake = (int)(hp.getMicroseconds() - lastRttTimestamp);
 			//Record last RTT Time stamp 
 			lastRttTimestamp = hp.getMicroseconds();
 			//Move state to Slow Start
 			setState(STATE_SLOW_START,"Completion ACK",hp);
-			
-			if(debug) {
-				System.out.println("\nEstimated RTT: "+estimatedRtt+" microseconds");
-			}
+			tcpOptionTimestampRtt=estimatedRttHandshake;
+			System.out.println(hp.getTime()+": Estimated Handshake RTT: "+nf.format(estimatedRttHandshake)+" microseconds");
 			
 		} else if(state == STATE_HANDSHAKE && flags.equals("[S.]")) { //Handshake SYN-ACK
 			//Prepare start time for estimated RTT
@@ -115,6 +121,9 @@ public class Connection {
 		} else if(flags.equals("[S]")) { //Initial SYN
 			setState(STATE_HANDSHAKE,"Initial SYN",hp);
 			lastRttTimestamp = hp.getMicroseconds();
+			if(hp.getTcpOptionTsVal() > -1L) {
+				TCP_OPTION_TIMESTAMP=true;
+			}
 			
 		} else if(flags.startsWith("[F")) { //Closing FIN
 			if(state != STATE_CLOSING) {
@@ -136,10 +145,6 @@ public class Connection {
 				//Sender packet count
 				senderPacketsPerRtt++;
 
-				//Capture the initial Slow start window size
-				if(slowStartInitialWindow == 0) {
-					slowStartInitialWindow = (int) hp.getSequenceSize();
-				}	
 				
 				if(hp.sequenceContains(duplicateAckSequenceNumber)) {
 					long recoveryTime = hp.getMicroseconds()-duplicateAckRetransmittedTimestamp;
@@ -148,11 +153,42 @@ public class Connection {
 					//System.out.println("\t"+hp.getTime()+" Fast Retransmitted:  "+lastAck+" Time: "+recoveryTime+ " Count: "+dupAckCount);
 				}
 				
+				
+				//Real-time RTT estimation
+				if(TCP_OPTION_TIMESTAMP) {
+					int tsSize = tcpOptionTimestampSender.size(); 
+					if(tsSize > 0) {
+						for(int x = 0; x < tsSize; x++) {
+							if(hp.getTcpOptionEcr() == tcpOptionTimestampSender.get(x).getTcpTimestamp()) {
+								TcpTimestamp tt = tcpOptionTimestampSender.remove(x);
+								long tRtt = hp.getMicroseconds()-tt.getMicroseconds();
+								int variance = (int) (tcpOptionTimestampRtt * RTT_VARIANCE_TRIGGER_LEVEL); 
+								if(tRtt > tcpOptionTimestampRtt+variance || tRtt < tcpOptionTimestampRtt-variance) {
+									System.out.println(hp.getTime()+": Estimated TCP Timestamp RTT: "+nf.format(tRtt)+" microseconds");
+									tcpOptionTimestampRtt=tRtt;
+								}
+								//Remove previous unused time stamps
+								for(int p = 0; p < x; p++) {
+									tcpOptionTimestampSender.remove(0);
+								}
+								//Remove subsequent identical timestamps
+								while(tcpOptionTimestampSender.size() > 0 && tcpOptionTimestampSender.get(0).getTcpTimestamp() == hp.getTcpOptionEcr()) {
+									tcpOptionTimestampSender.remove(0);
+								}
+								break;
+							}
+						}
+					}
+				}
 												
-			} else {
+			} else { //Receiver
 				if(hp.getWindowSize() != receiverWindowSize) {
 					receiverWindowSize = hp.getWindowSize();
 				}
+
+				//Real-time RTT estimation
+				tcpOptionTimestampSender.add(new TcpTimestamp(hp.getMicroseconds(),hp.getTcpOptionTsVal()));
+				
 				
 				//Watch for 3x Duplicate ACK
 				if(hp.getAck() == lastAck) {
@@ -165,30 +201,24 @@ public class Connection {
 					lastAck=hp.getAck();
 					dupAckCount=1;
 				}
-
-
 								
 			}
 						
 			//			
 			//Once per RTT processing
 			//
-			if( (lastRttTimestamp + estimatedRtt) <= hp.getMicroseconds()) {				
+			if( (lastRttTimestamp + estimatedRttHandshake) <= hp.getMicroseconds()) {				
 
 				
-				if(state == STATE_SLOW_START && sequenceCountPerRtt > lastSequenceCountPerRtt || duplicateAckRttCount > 0) {
-					//
-					ssthresh=sequenceCountPerRtt/2;
-				}
 				
 				//Throughput
 				if(lastRttTimestamp != 0) {
 					
 					if(debug) {
 						System.out.println("\n");
-						System.out.println("Current State: ["+getStateString(state)+"] SSTHRESH: ["+ssthresh+"]");
+						System.out.println("Current State: ["+getStateString(state)+"] RTT: ["+nf.format(0.0f)+"]");
 						System.out.println("Sequence Length: ["+sequenceCountPerRtt+"/"+lastSequenceCountPerRtt+"]");
-						System.out.println("Packets- Per RTT: ["+senderPacketsPerRtt+"/"+lastSenderPacketsPerRtt+"] SS Init Win: ["+slowStartInitialWindow+"]");
+						System.out.println("Packets- Per RTT: ["+senderPacketsPerRtt+"/"+lastSenderPacketsPerRtt+"]");
 						System.out.println("Receiver Window: ["+receiverWindowSize+"/"+lastReceiverWindowSize+"]");
 						if(duplicateAckRttCount > 0) {
 							System.out.println("Duplicate ACK: ["+duplicateAckRttTime+"] Count: ["+duplicateAckRttCount+"] Ratio: ["+(duplicateAckRttTime/duplicateAckRttCount)+"]");
@@ -235,7 +265,7 @@ public class Connection {
 		} else if(state == STATE_CONGESTION_AVOIDANCE) {
 			
 			if(sequenceCountPerRtt < receiverWindowSize) {
-				return new Transition(hp,STATE_SLOW_START,"Below SSTHRESH");
+				return new Transition(hp,STATE_SLOW_START,"Below Receiver Window Size");
 			}
 		} 
 		return new Transition(hp,state,null);
@@ -251,17 +281,9 @@ public class Connection {
 		int newState = t.getConnectionState();
 		if(state == newState) {
 			if(t.getTransitionReason() == null) {
+				//No transition recommended
 				return;
-			} /*else if(newState == STATE_SLOW_START){
-				//Add missed congestion avoidance
-				Transition tMissed = new Transition(t.getKey(),t.getTime(),t.getMicroseconds(),STATE_CONGESTION_AVOIDANCE,t.getTransitionReason());
-				transitions.add(tMissed);
-				System.out.println("Corrected: "+tMissed);
-			} else if(newState == STATE_CONGESTION_AVOIDANCE) {
-				Transition tMissed = new Transition(t.getKey(),t.getTime(),t.getMicroseconds(),STATE_SLOW_START,t.getTransitionReason());
-				transitions.add(tMissed);
-				System.out.println("Corrected: "+tMissed+" -> "+t.getTransitionReason());
-			}*/
+			} 
 		} 
 		
 		if(newState == STATE_SLOW_START || newState == STATE_CONGESTION_AVOIDANCE) {
@@ -293,7 +315,7 @@ public class Connection {
 		}
 	}
 	public int getEstimatedRtt() {
-		return estimatedRtt;
+		return estimatedRttHandshake;
 	}
 	
 	

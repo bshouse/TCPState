@@ -14,16 +14,14 @@ public class TcpDumpEntry {
 	protected String destination;
 	protected String flags;
 	protected String sequence = NA;
-	protected long sequenceStart=0;
-	protected long sequenceEnd=0;
-	protected long ack = -1;
+	protected long sequenceStart=0L;
+	protected long sequenceEnd=0L;
+	protected long ack = -1L;
 	protected int sequenceLength = 0;
 	protected int windowSize = 0;
-	 
-	
-	//String[] chunks;
-	//String[] event;
-	
+	protected long tsVal=-1L;
+	protected long ecr=-1L;
+	 	
 	public TcpDumpEntry(String text) throws ParseException {
 		String[] chunks = text.trim().split(", ");
 		String[] event = chunks[0].split(" ");
@@ -42,6 +40,15 @@ public class TcpDumpEntry {
 				
 			} else if(chunks[x].startsWith("win ")) {
 				windowSize = Integer.parseInt(chunks[x].substring(4));
+				
+			} else if(chunks[x].startsWith("options ")) {
+				String[] options = chunks[x].substring(10,chunks[x].length()-1).split(",");
+				int pos = 0;
+//System.out.println(options[2]);
+				if( (pos = options[2].indexOf("ecr")) > -1) {
+					tsVal = Long.parseLong(options[2].substring(7, pos-1)); 
+					ecr = Long.parseLong(options[2].substring(pos+4));
+				}
 				break;
 			}
 		}
@@ -54,18 +61,19 @@ public class TcpDumpEntry {
 				sequenceEnd=sequenceStart=Long.parseLong(nums[0]);
 			}
 		}
+		
 
-		/*
-		for(int x = 0; x < chunks.length; x++) {
+		
+		
+
+		
+		/*for(int x = 0; x < chunks.length; x++) {
 			System.out.println("chunks["+x+"]="+chunks[x]);
 		}
 
 		for(int x = 0; x < event.length; x++) {
 			System.out.println("event["+x+"]="+event[x]);
-		}
-
-		 
-		 */
+		}*/
 
 				
 	}
@@ -112,4 +120,16 @@ public class TcpDumpEntry {
 	public void setTimestamp(long timestamp) {
 		this.microseconds = timestamp;
 	}	
+	public long getSequenceEnd() {
+		return sequenceEnd;
+	}
+	public long getSequenceStart() {
+		return sequenceStart;
+	}
+	public long getTcpOptionTsVal() {
+		return tsVal;
+	}
+	public long getTcpOptionEcr() {
+		return ecr;
+	}
 }

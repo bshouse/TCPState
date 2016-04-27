@@ -21,7 +21,8 @@ public class TcpState {
 	private Connection c = null;
 	private boolean debug = false;
 
-	private NumberFormat nf = NumberFormat.getNumberInstance(Locale.US);
+	private static final NumberFormat nf = NumberFormat.getNumberInstance(Locale.US);
+	private float PASS_ACCURACY_LEVEL = 0.07f;
 	private JProbeDistiller jpd;
 	private List<JProbeLogEntry> jprobe = new ArrayList<JProbeLogEntry>();
 	private int jprobePos = 0;
@@ -179,10 +180,10 @@ public class TcpState {
 		if(missedMicroseconds > 0 || overboardMicroseconds > 0 || lateMicroseconds > 0) {
 			long total = missedMicroseconds + overboardMicroseconds + lateMicroseconds;
 			System.out.print("Total microseconds in wrong state: "+nf.format(total));
-			if(total > duration*.07) {
+			if(total > duration*PASS_ACCURACY_LEVEL) {
 				pass=false;
 			}
-			System.out.println(" (Permitted: "+nf.format((long)(duration*.07))+" microseconds of "+nf.format(duration)+" total connection time)");
+			System.out.println(" (Permitted: "+nf.format((long)(duration*PASS_ACCURACY_LEVEL))+" microseconds of "+nf.format(duration)+" total connection time)");
 		}
 		System.out.println("Accuracy: "+ nf.format((((duration-(overboardMicroseconds + missedMicroseconds + lateMicroseconds))*100.0f)/duration))+"%");
 		System.out.println("\n\n\n");
@@ -195,7 +196,7 @@ public class TcpState {
 
 			String[] tcpdumps = new String[] {"iperf.inet.tcpdump","iperf.vpn.tcpdump","cubic.30.192.3.171.8.tcpdump.log", "cubic.600.192.3.171.8.tcpdump.log", "cubic.60.192.3.171.8.tcpdump.log","cubic.600.192.3.171.8.20160420.233026.tcpdump.log","cubic.60.192.3.171.8.20160420.232855.tcpdump.log","vegas.30.192.3.171.8.20160420.235356.tcpdump.log","vegas.60.192.3.171.8.20160420.235457.tcpdump.log"};
 			for(int x = 0; x < jprobes.length; x++) {
-			//for(int x = 8; x < 9; x++) {
+			//for(int x = 0; x < 1; x++) {
 				System.out.println(x+"]-------------------------"+jprobes[x]+"-------------------------"+tcpdumps[x]);
 				FileInputStream jfis = new FileInputStream(new File("/opt/UCBVM/ReceiverDetectSender/"+jprobes[x]));
 				FileInputStream tfis = new FileInputStream(new File("/opt/UCBVM/ReceiverDetect/"+tcpdumps[x]));

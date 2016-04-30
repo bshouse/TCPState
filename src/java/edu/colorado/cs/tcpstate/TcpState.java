@@ -155,16 +155,18 @@ public class TcpState {
 			} else if(result.startsWith("Mismatch") && tcpdump.size() > x+1 && tcpdump.get(x+1).getConnectionState() == tr.getJprobeEnd().getConnectionState()) {
 				//Check for skipped transition
 				//Vegas will start in congestion congtrol instead of slow start
+				/*
 				System.out.println("Vegas Correction");
 				tr = new TransitionResult(jprobe.get(jprobePos-2), jprobe.get(jprobePos-1), null);
 				result = tr.getResult();
 				missedMicroseconds+=tr.getMicrosecondsInTransition();
 				x--;
+				*/
 
 			} 
 			System.out.println(result);
 		}
-		if(lastOverboardTcpDumpTransitionResult != null && overboardMicroseconds == 0) {
+		if(lastAccurateTcpDumpTransitionResult != null && lastOverboardTcpDumpTransitionResult != null && overboardMicroseconds == 0) {
 			overboardMicroseconds = lastAccurateTcpDumpTransitionResult.getJprobeEnd().getMicroseconds() - lastOverboardTcpDumpTransitionResult.getTcpdump().getMicroseconds();
 		}
 		
@@ -194,19 +196,19 @@ public class TcpState {
 	}
 	public static void main(String[] args) throws Exception {
 		if(args.length == 0) {
-			
-			String[] jprobes = new String[] {"iperf.inet.kern.log","iperf.vpn.kern.log","cubic.30.192.3.171.8.log", "cubic.600.192.3.171.8.log", "cubic.60.192.3.171.8.log","cubic.600.192.3.171.8.20160420.233026.log","cubic.60.192.3.171.8.20160420.232855.log","vegas.30.192.3.171.8.20160420.235356.log","vegas.60.192.3.171.8.20160420.235457.log"}; 
-			String[] tcpdumps = new String[] {"iperf.inet.tcpdump","iperf.vpn.tcpdump","cubic.30.192.3.171.8.tcpdump.log", "cubic.600.192.3.171.8.tcpdump.log", "cubic.60.192.3.171.8.tcpdump.log","cubic.600.192.3.171.8.20160420.233026.tcpdump.log","cubic.60.192.3.171.8.20160420.232855.tcpdump.log","vegas.30.192.3.171.8.20160420.235356.tcpdump.log","vegas.60.192.3.171.8.20160420.235457.tcpdump.log"};
-			
-			
 			/*
-			String[] jprobes = new String[] {};
+			String[] jprobes = new String[] {}; 
 			String[] tcpdumps = new String[] {};
 			*/
-			//for(int x = 0; x < jprobes.length; x++) {
-			for(int x = 1; x < 2; x++) {
+			
+			
+			String[] jprobes = new String[] {"iperf.inet.kern.log","iperf.vpn.kern.log","cubic.30.192.3.171.8.log", "cubic.600.192.3.171.8.log", "cubic.60.192.3.171.8.log","cubic.600.192.3.171.8.20160420.233026.log","cubic.60.192.3.171.8.20160420.232855.log","vegas.30.192.3.171.8.20160420.235356.log","vegas.60.192.3.171.8.20160420.235457.log","bic.30.192.3.171.8.20160429.205940.log","bic.600.192.3.171.8.20160429.210211.log","bic.60.192.3.171.8.20160429.210040.log","cubic.30.192.3.171.8.20160429.203337.log","cubic.600.192.3.171.8.20160429.203608.log","cubic.60.192.3.171.8.20160429.203438.log","dctcp.30.192.3.171.8.20160429.211241.log","dctcp.600.192.3.171.8.20160429.211512.log","dctcp.60.192.3.171.8.20160429.211342.log","highspeed.30.192.3.171.8.20160429.212543.log","highspeed.600.192.3.171.8.20160429.212814.log","highspeed.60.192.3.171.8.20160429.212643.log","htcp.30.192.3.171.8.20160429.213844.log","htcp.600.192.3.171.8.20160429.214115.log","htcp.60.192.3.171.8.20160429.213945.log","hybla.30.192.3.171.8.20160429.215145.log","hybla.600.192.3.171.8.20160429.215417.log","hybla.60.192.3.171.8.20160429.215246.log","illinois.30.192.3.171.8.20160429.220447.log","illinois.600.192.3.171.8.20160429.220718.log","illinois.60.192.3.171.8.20160429.220548.log","reno.30.192.3.171.8.20160429.204638.log","reno.600.192.3.171.8.20160429.204909.log","reno.60.192.3.171.8.20160429.204739.log","scalable.30.192.3.171.8.20160429.221749.log","scalable.600.192.3.171.8.20160429.222020.log","scalable.60.192.3.171.8.20160429.221849.log","vegas.30.192.3.171.8.20160429.223050.log","vegas.600.192.3.171.8.20160429.223321.log","vegas.60.192.3.171.8.20160429.223151.log","veno.30.192.3.171.8.20160429.224352.log","veno.600.192.3.171.8.20160429.224623.log","veno.60.192.3.171.8.20160429.224452.log","westwood.30.192.3.171.8.20160429.225653.log","westwood.600.192.3.171.8.20160429.225924.log","westwood.60.192.3.171.8.20160429.225754.log","yeah.30.192.3.171.8.20160429.230955.log","yeah.600.192.3.171.8.20160429.231226.log","yeah.60.192.3.171.8.20160429.231055.log"};
+			String[] tcpdumps = new String[] {"iperf.inet.tcpdump","iperf.vpn.tcpdump","cubic.30.192.3.171.8.tcpdump.log", "cubic.600.192.3.171.8.tcpdump.log", "cubic.60.192.3.171.8.tcpdump.log","cubic.600.192.3.171.8.20160420.233026.tcpdump.log","cubic.60.192.3.171.8.20160420.232855.tcpdump.log","vegas.30.192.3.171.8.20160420.235356.tcpdump.log","vegas.60.192.3.171.8.20160420.235457.tcpdump.log","bic.30.192.3.171.8.20160429.205940.tcpdump.log","bic.600.192.3.171.8.20160429.210211.tcpdump.log","bic.60.192.3.171.8.20160429.210040.tcpdump.log","cubic.30.192.3.171.8.20160429.203337.tcpdump.log","cubic.600.192.3.171.8.20160429.203608.tcpdump.log","cubic.60.192.3.171.8.20160429.203438.tcpdump.log","dctcp.30.192.3.171.8.20160429.211241.tcpdump.log","dctcp.600.192.3.171.8.20160429.211512.tcpdump.log","dctcp.60.192.3.171.8.20160429.211342.tcpdump.log","highspeed.30.192.3.171.8.20160429.212543.tcpdump.log","highspeed.600.192.3.171.8.20160429.212814.tcpdump.log","highspeed.60.192.3.171.8.20160429.212643.tcpdump.log","htcp.30.192.3.171.8.20160429.213844.tcpdump.log","htcp.600.192.3.171.8.20160429.214115.tcpdump.log","htcp.60.192.3.171.8.20160429.213945.tcpdump.log","hybla.30.192.3.171.8.20160429.215145.tcpdump.log","hybla.600.192.3.171.8.20160429.215417.tcpdump.log","hybla.60.192.3.171.8.20160429.215246.tcpdump.log","illinois.30.192.3.171.8.20160429.220447.tcpdump.log","illinois.600.192.3.171.8.20160429.220718.tcpdump.log","illinois.60.192.3.171.8.20160429.220548.tcpdump.log","reno.30.192.3.171.8.20160429.204638.tcpdump.log","reno.600.192.3.171.8.20160429.204909.tcpdump.log","reno.60.192.3.171.8.20160429.204739.tcpdump.log","scalable.30.192.3.171.8.20160429.221749.tcpdump.log","scalable.600.192.3.171.8.20160429.222020.tcpdump.log","scalable.60.192.3.171.8.20160429.221849.tcpdump.log","vegas.30.192.3.171.8.20160429.223050.tcpdump.log","vegas.600.192.3.171.8.20160429.223321.tcpdump.log","vegas.60.192.3.171.8.20160429.223151.tcpdump.log","veno.30.192.3.171.8.20160429.224352.tcpdump.log","veno.600.192.3.171.8.20160429.224623.tcpdump.log","veno.60.192.3.171.8.20160429.224452.tcpdump.log","westwood.30.192.3.171.8.20160429.225653.tcpdump.log","westwood.600.192.3.171.8.20160429.225924.tcpdump.log","westwood.60.192.3.171.8.20160429.225754.tcpdump.log","yeah.30.192.3.171.8.20160429.230955.tcpdump.log","yeah.600.192.3.171.8.20160429.231226.tcpdump.log","yeah.60.192.3.171.8.20160429.231055.tcpdump.log"};
+			
+			for(int x = 0; x < jprobes.length; x++) {
+			//for(int x = 17; x < 18; x++) {
 				TcpState ts = new TcpState();
-				ts.setDebug(true);
+				//ts.setDebug(true);
 				System.out.println(x+"]-------------------------"+jprobes[x]+"-------------------------"+tcpdumps[x]);
 				FileInputStream jfis = new FileInputStream(new File("/opt/UCBVM/ReceiverDetectSender/"+jprobes[x]));
 				FileInputStream tfis = new FileInputStream(new File("/opt/UCBVM/ReceiverDetect/"+tcpdumps[x]));

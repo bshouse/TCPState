@@ -1,0 +1,16 @@
+sysctl -q -w net.ipv4.tcp_allowed_congestion_control="cubic reno"
+
+rmmod tcp_bic
+rmmod tcp_dctcp
+rmmod tcp_highspeed
+rmmod tcp_htcp
+rmmod tcp_hybla
+rmmod tcp_illinois
+rmmod tcp_scalable
+rmmod tcp_yeah
+rmmod tcp_vegas
+rmmod tcp_veno
+rmmod tcp_westwood
+
+
+

@@ -10,6 +10,6 @@ modprobe tcp_veno
 modprobe tcp_westwood
 modprobe tcp_yeah
 
-sysctl -q -w net.ipv4.tcp_allowed_congestion_control="cubic reno bic dctcp highspeed htcp hybla illinois scalable vegas veno westwood yeah"
+sysctl -q -w net.ipv4.tcp_allowed_congestion_control="bic cubic dctcp highspeed htcp hybla illinois reno scalable vegas veno westwood yeah"
 
 

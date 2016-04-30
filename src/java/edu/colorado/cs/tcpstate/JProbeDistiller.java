@@ -21,7 +21,7 @@ public class JProbeDistiller {
 	public List<JProbeLogEntry> load(InputStream jprobeLog) {
 		// Load a list of JProbeLogEntries
 		// The 1st and Last of each group
-
+		
 		List<JProbeLogEntry> jprobeEntries = new ArrayList<JProbeLogEntry>();
 
 		try {
@@ -29,7 +29,7 @@ public class JProbeDistiller {
 			String line;
 			int lineCount = 0;
 			int mode = MODE_BEGIN;
-			JProbeLogEntry previous1 = null, previous2=null;
+			JProbeLogEntry previous1 = null, previous2=null, firstCongAvoid = null;
 			while( br.hasNextLine()) {
 				line = br.nextLine();
 				lineCount++;
@@ -38,12 +38,12 @@ public class JProbeDistiller {
 					if (mode == MODE_CONGESTION_AVOIDANCE) {
 						if (!jle.isCongestionControl()) {
 							if(jprobeEntries.get(jprobeEntries.size()-1).getMicroseconds() > previous1.getMicroseconds()) {
-								System.out.println("MCA1("+lineCount+"): "+previous1);
+								System.out.println("JProbe - ERROR MCA1("+lineCount+"): "+previous1);
 								break;
 							}
 							jprobeEntries.add(previous1);
 							if(previous1.getMicroseconds() > jle.getMicroseconds()) {
-								System.out.println("MCA2: "+previous1);
+								System.out.println("JProbe - MCA2: "+previous1);
 							}
 							jprobeEntries.add(jle);
 							mode = MODE_SLOW_START;
@@ -51,11 +51,11 @@ public class JProbeDistiller {
 					} else if (mode == MODE_SLOW_START) {
 						if (jle.isCongestionControl()) {
 							if(jprobeEntries.get(jprobeEntries.size()-1).getMicroseconds() > previous2.getMicroseconds()) {
-								System.out.println("MSS1: "+previous2);
+								System.out.println("JProbe - MSS1: "+previous2);
 							}
 							jprobeEntries.add(previous2);
 							if(previous2.getMicroseconds() > previous1.getMicroseconds()) {
-								System.out.println("MSS2: "+previous1);
+								System.out.println("JProbe - MSS2: "+previous1);
 							}
 							jprobeEntries.add(previous1);
 							mode = MODE_CONGESTION_AVOIDANCE;
@@ -66,8 +66,10 @@ public class JProbeDistiller {
 							mode = MODE_SLOW_START;
 							jprobeEntries.add(jle);
 						} else {
-							mode = MODE_CONGESTION_AVOIDANCE;
-							jprobeEntries.add(previous1);
+							lineCount--;
+							if(firstCongAvoid == null) {
+								firstCongAvoid = jle;
+							}
 						}
 					}
 
@@ -75,13 +77,22 @@ public class JProbeDistiller {
 				previous2 = previous1;
 				previous1 = jle;
 			}
-			if(previous1 != null) { //Blank JProbe file?
+			if(previous1 != null) { //Blank JProbe file / No slow start
 				jprobeEntries.add(previous1);
 			}
+			if(jprobeEntries.size() == 1 && jprobeEntries.get(0).isCongestionControl()) {
+				//Some Congestion Control never enter slow start
+				//e.g. DCTCP
+				jprobeEntries.add(0, firstCongAvoid);
+			}
+
 			br.close();
 		} catch (Exception e) {
 			e.printStackTrace();
 		}		
+		for(JProbeLogEntry jple: jprobeEntries) {
+			System.out.println("****"+jple);
+		}
 		return jprobeEntries;
 	}
 
@@ -112,6 +123,7 @@ public class JProbeDistiller {
 			transitionList.add(t);
 			transitionIn = !transitionIn;
 		}
+		
 		return transitionList;
 	}
 

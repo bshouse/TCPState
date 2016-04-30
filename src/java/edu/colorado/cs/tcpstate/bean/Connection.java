@@ -45,9 +45,9 @@ public class Connection {
 	 * 
 	 */
 	//Packets in the round-trip time
-	private int sequenceCountPerRtt=0;
+	private long sequenceCountPerRtt=0;
 	//Packets in the previous round-trip time
-	private int lastSequenceCountPerRtt=0;
+	private long lastSequenceCountPerRtt=0;
 	//Number of TCP dump entries
 	private int senderPacketsPerRtt=0;
 	private int lastSenderPacketsPerRtt=0;
@@ -262,11 +262,11 @@ public class Connection {
 				return new Transition(hp,STATE_CONGESTION_AVOIDANCE,"Window Stabilized");
 			}
 			
-		} else if(state == STATE_CONGESTION_AVOIDANCE) {
-			
-			if(sequenceCountPerRtt < receiverWindowSize) {
-				return new Transition(hp,STATE_SLOW_START,"Below Receiver Window Size ("+sequenceCountPerRtt+" < "+receiverWindowSize+")");
+		} else if(state == STATE_CONGESTION_AVOIDANCE) {			
+			if(sequenceCountPerRtt > lastSequenceCountPerRtt * lastSequenceCountPerRtt) {
+				return new Transition(hp,STATE_SLOW_START,"Exponential Growth ("+sequenceCountPerRtt+" > "+(lastSequenceCountPerRtt * lastSequenceCountPerRtt)+")");
 			}
+			
 		} 
 		return new Transition(hp,state,null);
 	}

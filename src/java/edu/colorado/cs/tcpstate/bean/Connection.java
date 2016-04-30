@@ -21,7 +21,7 @@ public class Connection {
 	//Common tracking variables
 	protected boolean debug = false;	
 	protected boolean TCP_OPTION_TIMESTAMP = false;
-	protected float RTT_VARIANCE_TRIGGER_LEVEL = 0.3f;
+	protected float RTT_VARIANCE_TRIGGER_LEVEL = 0.5f;
 	protected List<Transition> transitions = new ArrayList<Transition>(100);
 	protected int state = STATE_CLOSED;
 	protected String senderIP;
@@ -112,7 +112,7 @@ public class Connection {
 			//Move state to Slow Start
 			setState(STATE_SLOW_START,"Completion ACK",hp);
 			tcpOptionTimestampRtt=estimatedRttHandshake;
-			System.out.println(hp.getTime()+": Estimated Handshake RTT: "+nf.format(estimatedRttHandshake)+" microseconds");
+			System.out.println(hp.getTime()+" Estimated Handshake RTT: "+nf.format(estimatedRttHandshake)+" microseconds");
 			
 		} else if(state == STATE_HANDSHAKE && flags.equals("[S.]")) { //Handshake SYN-ACK
 			//Prepare start time for estimated RTT
@@ -164,7 +164,7 @@ public class Connection {
 								long tRtt = hp.getMicroseconds()-tt.getMicroseconds();
 								int variance = (int) (tcpOptionTimestampRtt * RTT_VARIANCE_TRIGGER_LEVEL); 
 								if(tRtt > tcpOptionTimestampRtt+variance || tRtt < tcpOptionTimestampRtt-variance) {
-									System.out.println(hp.getTime()+": Estimated TCP Timestamp RTT: "+nf.format(tRtt)+" microseconds");
+									System.out.println(hp.getTime()+" Estimated TCP Timestamp RTT: "+nf.format(tRtt)+" microseconds");
 									tcpOptionTimestampRtt=tRtt;
 								}
 								//Remove previous unused time stamps
@@ -207,7 +207,7 @@ public class Connection {
 			//			
 			//Once per RTT processing
 			//
-			if( (lastRttTimestamp + estimatedRttHandshake) <= hp.getMicroseconds()) {				
+			if( (lastRttTimestamp + tcpOptionTimestampRtt) <= hp.getMicroseconds()) {				
 
 				
 				
@@ -216,7 +216,7 @@ public class Connection {
 					
 					if(debug) {
 						System.out.println("\n");
-						System.out.println("Current State: ["+getStateString(state)+"] RTT: ["+nf.format(0.0f)+"]");
+						System.out.println("Current State: ["+getStateString(state)+"] RTT: ["+nf.format(tcpOptionTimestampRtt)+"]");
 						System.out.println("Sequence Length: ["+sequenceCountPerRtt+"/"+lastSequenceCountPerRtt+"]");
 						System.out.println("Packets- Per RTT: ["+senderPacketsPerRtt+"/"+lastSenderPacketsPerRtt+"]");
 						System.out.println("Receiver Window: ["+receiverWindowSize+"/"+lastReceiverWindowSize+"]");
@@ -265,7 +265,7 @@ public class Connection {
 		} else if(state == STATE_CONGESTION_AVOIDANCE) {
 			
 			if(sequenceCountPerRtt < receiverWindowSize) {
-				return new Transition(hp,STATE_SLOW_START,"Below Receiver Window Size");
+				return new Transition(hp,STATE_SLOW_START,"Below Receiver Window Size ("+sequenceCountPerRtt+" < "+receiverWindowSize+")");
 			}
 		} 
 		return new Transition(hp,state,null);
@@ -290,7 +290,7 @@ public class Connection {
 			transitions.add(t);
 		}
 		
-		System.out.println(t);
+		System.out.println(t+" - EST RTT: "+nf.format(tcpOptionTimestampRtt)+" microseconds");
 		state=newState;
 	}
 	

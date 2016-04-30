@@ -75,7 +75,9 @@ public class JProbeDistiller {
 				previous2 = previous1;
 				previous1 = jle;
 			}
-			jprobeEntries.add(previous1);
+			if(previous1 != null) { //Blank JProbe file?
+				jprobeEntries.add(previous1);
+			}
 			br.close();
 		} catch (Exception e) {
 			e.printStackTrace();

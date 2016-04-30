@@ -22,7 +22,7 @@ public class TcpState {
 	private boolean debug = false;
 
 	private static final NumberFormat nf = NumberFormat.getNumberInstance(Locale.US);
-	private float PASS_ACCURACY_LEVEL = 0.07f;
+	private float PASS_ACCURACY_LEVEL = 0.05f;
 	private JProbeDistiller jpd;
 	private List<JProbeLogEntry> jprobe = new ArrayList<JProbeLogEntry>();
 	private int jprobePos = 0;
@@ -189,18 +189,27 @@ public class TcpState {
 		System.out.println("\n\n\n");
 		return pass;
 	}
-
+	public void setDebug(boolean tf) {
+		debug=tf;
+	}
 	public static void main(String[] args) throws Exception {
 		if(args.length == 0) {
+			
 			String[] jprobes = new String[] {"iperf.inet.kern.log","iperf.vpn.kern.log","cubic.30.192.3.171.8.log", "cubic.600.192.3.171.8.log", "cubic.60.192.3.171.8.log","cubic.600.192.3.171.8.20160420.233026.log","cubic.60.192.3.171.8.20160420.232855.log","vegas.30.192.3.171.8.20160420.235356.log","vegas.60.192.3.171.8.20160420.235457.log"}; 
-
 			String[] tcpdumps = new String[] {"iperf.inet.tcpdump","iperf.vpn.tcpdump","cubic.30.192.3.171.8.tcpdump.log", "cubic.600.192.3.171.8.tcpdump.log", "cubic.60.192.3.171.8.tcpdump.log","cubic.600.192.3.171.8.20160420.233026.tcpdump.log","cubic.60.192.3.171.8.20160420.232855.tcpdump.log","vegas.30.192.3.171.8.20160420.235356.tcpdump.log","vegas.60.192.3.171.8.20160420.235457.tcpdump.log"};
-			for(int x = 0; x < jprobes.length; x++) {
-			//for(int x = 0; x < 1; x++) {
+			
+			
+			/*
+			String[] jprobes = new String[] {};
+			String[] tcpdumps = new String[] {};
+			*/
+			//for(int x = 0; x < jprobes.length; x++) {
+			for(int x = 1; x < 2; x++) {
+				TcpState ts = new TcpState();
+				ts.setDebug(true);
 				System.out.println(x+"]-------------------------"+jprobes[x]+"-------------------------"+tcpdumps[x]);
 				FileInputStream jfis = new FileInputStream(new File("/opt/UCBVM/ReceiverDetectSender/"+jprobes[x]));
 				FileInputStream tfis = new FileInputStream(new File("/opt/UCBVM/ReceiverDetect/"+tcpdumps[x]));
-				TcpState ts = new TcpState();
 				if(!ts.process(tfis, jfis)) {
 					System.out.println(x+"]-------------------------"+jprobes[x]+"-------------------------"+tcpdumps[x]);
 					break;

@@ -15,6 +15,7 @@ public class TcpDumpSplit {
 			String line = null;
 			int pos = 0;
 			Scanner s = new Scanner(tcpdump);
+			int count = 0;
 			while(s.hasNext()) {
 				line = s.nextLine();
 				if( line.indexOf("[S]") > -1 && (pos = line.indexOf(">")) > -1) {
@@ -27,6 +28,7 @@ public class TcpDumpSplit {
 						lastPort=port;
 						System.out.println("Parsing TCPDUMP for port# "+port);
 						fw = new FileWriter(new File(port+".log"));
+						count++;
 					}
 				}
 				if(fw!=null && line.indexOf(lastPort) > -1) {
@@ -35,7 +37,7 @@ public class TcpDumpSplit {
 			}
 			fw.close();
 			s.close();
-			
+			System.out.println("Count: "+count);
 		} catch(Exception e) {
 			e.printStackTrace();
 		}

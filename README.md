@@ -27,21 +27,22 @@ Run it: java TcpState [TcpDump file] {Jprobe file}
 ```
 
 
-# Output with JProbe (Vegas Dataset) :
+# Output with JProbe (BIC Dataset) :
 ```
-08:31:51.750462 :71.212.166.51.48325:192.3.171.8.5001: Handshake [Initial SYN]
-08:31:51.806818 :71.212.166.51.48325:192.3.171.8.5001: Slow Start [Completion ACK]
-08:31:51.869110--------tcp_slow_start (22:31:51.117582[124316])
-08:31:51.869110--------tcp_slow_start (22:31:51.117582[125554])
-08:31:51.869110--------tcp_vegas_cong_avoid (22:31:51.117582[125560])
-08:31:51.984041 :71.212.166.51.48325:192.3.171.8.5001: Congestion Avoidance [Window Stabilized]
-08:32:52.865751--------tcp_vegas_cong_avoid (22:32:52.117643[067571])
-08:32:52.883311 :71.212.166.51.48325:192.3.171.8.5001: Closing [Sender FIN]
-08:32:52.891987 :71.212.166.51.48325:192.3.171.8.5001: Closed [Receiver FIN]
-
+19:49:40.657956 :192.168.1.1.41962:192.168.1.2.5001: Handshake [Initial SYN]
+19:49:40.718236 :192.168.1.1.41962:192.168.1.2.5001: Slow Start [Completion ACK]
+19:49:40.718236 :192.168.1.1.41962:192.168.1.2.5001: Handshake RTT: 60,231 microseconds
+19:49:40.781933--------tcp_slow_start (09:49:40.398704[08482])
+19:49:40.781933--------tcp_slow_start (09:49:40.398705[84034])
+19:49:40.781933--------bictcp_cong_avoid (09:49:40.398705[84208])
+19:49:40.963454 :192.168.1.1.41962:192.168.1.2.5001: Congestion Avoidance [Window Stabilized]
+19:49:41.298996 :192.168.1.1.41962:192.168.1.2.5001: Estimated RTT: 90,428 microseconds
+19:50:11.093473 :192.168.1.1.41962:192.168.1.2.5001: Closing [Sender FIN]
+19:50:11.098121 :192.168.1.1.41962:192.168.1.2.5001: Closed [Receiver FIN]
+19:50:11.154345--------tcp_cong_avoid_ai (09:50:11.399007[76566])
 -------------SUMMARY-------------
 Match(Slow Start): 0 microseconds after sender state change [Completion ACK]
-Match(Congestion Avoidance): 177,223 microseconds after sender state change [Window Stabilized]
-Total microseconds in wrong state: 177,223 (Permitted: 3,059,840 microseconds of 61,196,814 total connection time)
-Accuracy: 99.71%
+Match(Congestion Avoidance): 245,217 microseconds after sender state change [Window Stabilized]
+Total microseconds in wrong state: 245,217 (Permitted: 1,524,819 microseconds of 30,496,389 total connection time)
+Accuracy: 99.196%
 ```

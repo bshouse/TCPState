@@ -112,7 +112,7 @@ public class Connection {
 			//Move state to Slow Start
 			setState(STATE_SLOW_START,"Completion ACK",hp);
 			tcpOptionTimestampRtt=estimatedRttHandshake;
-			System.out.println(hp.getTime()+" Estimated Handshake RTT: "+nf.format(estimatedRttHandshake)+" microseconds");
+			System.out.println(hp.getTime()+" :"+hp.getKey()+" Handshake RTT: "+nf.format(estimatedRttHandshake)+" microseconds");
 			
 		} else if(state == STATE_HANDSHAKE && flags.equals("[S.]")) { //Handshake SYN-ACK
 			//Prepare start time for estimated RTT
@@ -164,7 +164,7 @@ public class Connection {
 								long tRtt = hp.getMicroseconds()-tt.getMicroseconds();
 								int variance = (int) (tcpOptionTimestampRtt * RTT_VARIANCE_TRIGGER_LEVEL); 
 								if(tRtt > tcpOptionTimestampRtt+variance || tRtt < tcpOptionTimestampRtt-variance) {
-									System.out.println(hp.getTime()+" Estimated TCP Timestamp RTT: "+nf.format(tRtt)+" microseconds");
+									System.out.println(hp.getTime()+" :"+hp.getKey()+" Estimated RTT: "+nf.format(tRtt)+" microseconds");
 									tcpOptionTimestampRtt=tRtt;
 								}
 								//Remove previous unused time stamps
@@ -290,7 +290,7 @@ public class Connection {
 			transitions.add(t);
 		}
 		
-		System.out.println(t+" - EST RTT: "+nf.format(tcpOptionTimestampRtt)+" microseconds");
+		System.out.println(t);
 		state=newState;
 	}
 	

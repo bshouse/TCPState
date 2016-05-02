@@ -10,14 +10,17 @@ import edu.colorado.cs.tcpstate.bean.JProbeLogEntry;
 import edu.colorado.cs.tcpstate.bean.Transition;
 
 public class JProbeDistiller {
+	
+	private static final int MODE_BEGIN = -1;
+	private static final int MODE_CONGESTION_AVOIDANCE = 0;
+	private static final int MODE_SLOW_START = 1;
+	
+	protected boolean debug = false;
 
 	public JProbeDistiller() {
 	}
 
-	private static final int MODE_BEGIN = -1;
-	private static final int MODE_CONGESTION_AVOIDANCE = 0;
-	private static final int MODE_SLOW_START = 1;
-
+	
 	public List<JProbeLogEntry> load(InputStream jprobeLog) {
 		// Load a list of JProbeLogEntries
 		// The 1st and Last of each group
@@ -64,8 +67,17 @@ public class JProbeDistiller {
 					} else if (mode == MODE_BEGIN) {
 						if (!jle.isCongestionControl()) {
 							mode = MODE_SLOW_START;
-							jprobeEntries.add(jle);
+							if(previous1 != null && !previous1.isCongestionControl()) {
+								//BIC doesn't use the pair (cong avoid & slow start) calling. Just a stream of slow_start
+								jprobeEntries.add(previous1);
+								lineCount++;
+							} else {
+								//Pair-wise grouping (cong avoid & slow start): add the final call
+								jprobeEntries.add(jle);
+							}
 						} else {
+							//TCP shouldn't go into Congestion Avoidance right away
+							//Capture this entry in case of weirdness
 							lineCount--;
 							if(firstCongAvoid == null) {
 								firstCongAvoid = jle;
@@ -85,14 +97,29 @@ public class JProbeDistiller {
 				//e.g. DCTCP
 				jprobeEntries.add(0, firstCongAvoid);
 			}
+			
+			if(debug) {
+				for(JProbeLogEntry jple: jprobeEntries) {
+					System.out.println("JProbleDistiller: "+jple);
+				}
+			}
 
 			br.close();
 		} catch (Exception e) {
 			e.printStackTrace();
-		}		
-		for(JProbeLogEntry jple: jprobeEntries) {
-			System.out.println("****"+jple);
+		}	
+		
+		//Sanity Checks
+		if(jprobeEntries.size() % 2 != 0) {
+			System.out.println("ERROR: Odd number of JProbe Log Entries");
 		}
+		for(int x = 0; x < jprobeEntries.size(); x+=2) {
+			if(jprobeEntries.get(x).isCongestionControl() != jprobeEntries.get(x+1).isCongestionControl()) {
+				System.out.println("ERROR: Mismatched JProbe Log Entries");
+				break;
+			}
+		}
+		
 		return jprobeEntries;
 	}
 
@@ -125,6 +152,16 @@ public class JProbeDistiller {
 		}
 		
 		return transitionList;
+	}
+
+
+	public boolean isDebug() {
+		return debug;
+	}
+
+
+	public void setDebug(boolean debug) {
+		this.debug = debug;
 	}
 
 }

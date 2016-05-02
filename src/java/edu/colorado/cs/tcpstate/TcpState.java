@@ -35,6 +35,7 @@ public class TcpState {
 	public boolean process(InputStream tcpDump, InputStream jprobeLog) {
 		// debug=true;
 		jpd = new JProbeDistiller();
+		//jpd.setDebug(true);
 		jprobe = jpd.load(jprobeLog);
 		return process(tcpDump);
 	}
@@ -63,12 +64,11 @@ public class TcpState {
 				} else {
 					c.addProgress(hp);
 					if (hp.getFlags().equals("[.]") && c.getState() == Connection.STATE_CLOSED) {
-						if (debug) {
-							// Print the last one / Make sure nothing was missed
-							while (jprobePos < jprobe.size()) {
-								JProbeLogEntry jle = jprobe.get(jprobePos);
-								System.out.println(hp.getTime()+"--------"+jle.getMessage()+" ("+jle.getTime()+")"+" ["+hp.getMicroseconds()+" >= "+jle.getMicroseconds()+"]");								jprobePos++;
-							}
+						// Print the last one / Make sure nothing was missed
+						while (jprobePos < jprobe.size()) {
+							JProbeLogEntry jle = jprobe.get(jprobePos);
+							System.out.println(hp.getTime()+"--------"+jle.getMessage()+" ("+jle.getTime()+")");
+							jprobePos++;
 						}
 
 						if (jprobe.size() > 0) {
@@ -152,18 +152,22 @@ public class TcpState {
 					}
 				} 
 				lastOverboardTcpDumpTransitionResult=tr;
-			} else if(result.startsWith("Mismatch") && tcpdump.size() > x+1 && tcpdump.get(x+1).getConnectionState() == tr.getJprobeEnd().getConnectionState()) {
-				//Check for skipped transition
-				//Vegas will start in congestion congtrol instead of slow start
-				/*
-				System.out.println("Vegas Correction");
-				tr = new TransitionResult(jprobe.get(jprobePos-2), jprobe.get(jprobePos-1), null);
-				result = tr.getResult();
-				missedMicroseconds+=tr.getMicrosecondsInTransition();
-				x--;
-				*/
-
-			} 
+			} else if(result.startsWith("Mismatch")) {
+				if (tcpdump.size() > x+1) {
+					//watch for No Slow Start
+					TransitionResult trForward = new TransitionResult(tr.getJprobeStart(), tr.getJprobeEnd(), tcpdump.get(x+1));
+					if(trForward.getResult().startsWith("Match")) {
+						System.out.println(result);
+						result=trForward.getResult();
+						long late = trForward.getTcpdump().getMicroseconds() - tr.getJprobeStart().getMicroseconds();
+						if(late < 0) {
+							late*=-1;
+						}
+						lateMicroseconds += late;
+						x++;
+					}
+				}
+			}
 			System.out.println(result);
 		}
 		if(lastAccurateTcpDumpTransitionResult != null && lastOverboardTcpDumpTransitionResult != null && overboardMicroseconds == 0) {
@@ -206,7 +210,7 @@ public class TcpState {
 			String[] tcpdumps = new String[] {"iperf.inet.tcpdump","iperf.vpn.tcpdump","cubic.30.192.3.171.8.tcpdump.log", "cubic.600.192.3.171.8.tcpdump.log", "cubic.60.192.3.171.8.tcpdump.log","cubic.600.192.3.171.8.20160420.233026.tcpdump.log","cubic.60.192.3.171.8.20160420.232855.tcpdump.log","vegas.30.192.3.171.8.20160420.235356.tcpdump.log","vegas.60.192.3.171.8.20160420.235457.tcpdump.log","bic.30.192.3.171.8.20160429.205940.tcpdump.log","bic.600.192.3.171.8.20160429.210211.tcpdump.log","bic.60.192.3.171.8.20160429.210040.tcpdump.log","cubic.30.192.3.171.8.20160429.203337.tcpdump.log","cubic.600.192.3.171.8.20160429.203608.tcpdump.log","cubic.60.192.3.171.8.20160429.203438.tcpdump.log","dctcp.30.192.3.171.8.20160429.211241.tcpdump.log","dctcp.600.192.3.171.8.20160429.211512.tcpdump.log","dctcp.60.192.3.171.8.20160429.211342.tcpdump.log","highspeed.30.192.3.171.8.20160429.212543.tcpdump.log","highspeed.600.192.3.171.8.20160429.212814.tcpdump.log","highspeed.60.192.3.171.8.20160429.212643.tcpdump.log","htcp.30.192.3.171.8.20160429.213844.tcpdump.log","htcp.600.192.3.171.8.20160429.214115.tcpdump.log","htcp.60.192.3.171.8.20160429.213945.tcpdump.log","hybla.30.192.3.171.8.20160429.215145.tcpdump.log","hybla.600.192.3.171.8.20160429.215417.tcpdump.log","hybla.60.192.3.171.8.20160429.215246.tcpdump.log","illinois.30.192.3.171.8.20160429.220447.tcpdump.log","illinois.600.192.3.171.8.20160429.220718.tcpdump.log","illinois.60.192.3.171.8.20160429.220548.tcpdump.log","reno.30.192.3.171.8.20160429.204638.tcpdump.log","reno.600.192.3.171.8.20160429.204909.tcpdump.log","reno.60.192.3.171.8.20160429.204739.tcpdump.log","scalable.30.192.3.171.8.20160429.221749.tcpdump.log","scalable.600.192.3.171.8.20160429.222020.tcpdump.log","scalable.60.192.3.171.8.20160429.221849.tcpdump.log","vegas.30.192.3.171.8.20160429.223050.tcpdump.log","vegas.600.192.3.171.8.20160429.223321.tcpdump.log","vegas.60.192.3.171.8.20160429.223151.tcpdump.log","veno.30.192.3.171.8.20160429.224352.tcpdump.log","veno.600.192.3.171.8.20160429.224623.tcpdump.log","veno.60.192.3.171.8.20160429.224452.tcpdump.log","westwood.30.192.3.171.8.20160429.225653.tcpdump.log","westwood.600.192.3.171.8.20160429.225924.tcpdump.log","westwood.60.192.3.171.8.20160429.225754.tcpdump.log","yeah.30.192.3.171.8.20160429.230955.tcpdump.log","yeah.600.192.3.171.8.20160429.231226.tcpdump.log","yeah.60.192.3.171.8.20160429.231055.tcpdump.log"};
 			
 			for(int x = 0; x < jprobes.length; x++) {
-			//for(int x = 17; x < 18; x++) {
+			//for(int x = 1; x < 2; x++) {
 				TcpState ts = new TcpState();
 				//ts.setDebug(true);
 				System.out.println(x+"]-------------------------"+jprobes[x]+"-------------------------"+tcpdumps[x]);
@@ -223,7 +227,7 @@ public class TcpState {
 			}
 		} else if (args.length == 1) {
 			FileInputStream tfis = new FileInputStream(new File(args[0]));
-			(new TcpState()).process(tfis);;
+			(new TcpState()).process(tfis);
 			tfis.close();
 
 		} else if (args.length == 2) {
